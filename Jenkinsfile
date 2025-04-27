@@ -1,117 +1,105 @@
 pipeline {
     agent any
-
     tools {
-        maven 'Maven 3.9.6'
-        jdk 'JAVA JDK 17'
+        maven "Maven 3.9.6"
+        jdk "JAVA JDK 17"
     }
 
-    stages {
+
+    environment {
+        registryCredential = 'ecr:us-east-1:aws-creds'
+        appRegistry = "349334771881.dkr.ecr.us-east-1.amazonaws.com/vprofile-app-img"
+        vprofileRegistry = "https://349334771881.dkr.ecr.us-east-1.amazonaws.com"
+    }
+
+  stages {
+   
         stage('Fetch code') {
             steps {
-                git branch: 'atom',
-                    url: 'https://github.com/hkhcoder/vprofile-project/'
+               git branch: 'docker', url: 'https://github.com/hkhcoder/vprofile-project.git'
             }
+
         }
 
-        stage('Build') {
-            steps {
-                sh 'mvn install -DskipTests'
+
+        stage('Build'){
+            steps{
+               sh 'mvn install -DskipTests'
             }
+
             post {
-                always {
-                    echo "------------Printing the always block------------"
-                }
-                success {
-                    echo "Archiving Artifact"
-                    echo "------------Printing the success block------------"
-                    archiveArtifacts artifacts: '**/*.war'
-                }
-                failure {
-                    echo "------------Printing the failure block------------"
-                }
+               success {
+                  echo 'Now Archiving it...'
+                  archiveArtifacts artifacts: '**/target/*.war'
+               }
             }
         }
 
-        stage('Unit Test') {
-            steps {
+        stage('UNIT TEST') {
+            steps{
                 sh 'mvn test'
             }
         }
 
         stage('Checkstyle Analysis') {
-            steps {
+            steps{
                 sh 'mvn checkstyle:checkstyle'
             }
         }
 
-        stage('Sonar Code Analysis') {
+        stage("Sonar Code Analysis") {
             environment {
                 scannerHome = tool 'sonar6.2'
             }
             steps {
-                withSonarQubeEnv('sonarserver') {
-                    sh """
-                    ${scannerHome}/bin/sonar-scanner \
-                    -Dsonar.projectKey=vprofile \
-                    -Dsonar.projectName=vprofile \
-                    -Dsonar.projectVersion=1.0 \
-                    -Dsonar.sources=src/ \
-                    -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
-                    -Dsonar.junit.reportsPath=target/surefire-reports/ \
-                    -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                    -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
-                    """
-                }
+              withSonarQubeEnv('sonarserver') {
+                sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=vprofile \
+                   -Dsonar.projectName=vprofile \
+                   -Dsonar.projectVersion=1.0 \
+                   -Dsonar.sources=src/ \
+                   -Dsonar.java.binaries=target/test-classes/com/visualpathit/account/controllerTest/ \
+                   -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                   -Dsonar.jacoco.reportsPath=target/jacoco.exec \
+                   -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+              }
             }
         }
 
-        stage('Quality Gate Check') {
+        stage("Quality Gate") {
             steps {
-                timeout(time: 2, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+              timeout(time: 1, unit: 'HOURS') {
+                waitForQualityGate abortPipeline: true
+              }
+            }
+        }
+
+        
+        stage('Build Docker Image') {
+          steps {
+       
+            script {
+                dockerImage = docker.build( appRegistry + ":$BUILD_NUMBER", "./Docker-files/app/multistage/")
                 }
+          }
+    
+        }
+
+        stage('Upload Docker Image') {
+          steps{
+            script {
+              docker.withRegistry( vprofileRegistry, registryCredential ) {
+                dockerImage.push("$BUILD_NUMBER")
+                dockerImage.push('latest')
+              }
+            }
+          }
+        }
+
+        stage('Remove Docker Images from Local'){
+            steps{
+                sh'docker rmi -f $(docker images -a -q)'
             }
         }
 
-        stage('UploadArtifact') {
-            steps {
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: '172.31.23.121:8081',
-                    groupId: 'QA',
-                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
-                    repository: 'vprofile-repo',
-                    credentialsId: 'nexuslogin',
-                    artifacts: [
-                        [
-                            artifactId: 'vproapp',
-                            classifier: '',
-                            file: 'target/vprofile-v2.war',
-                            type: 'war'
-                        ]
-                    ]
-                )
-            }
-        }
-    }
-
-    // --- Yeh post block stages ke baad likhna zaroori hai ---
-    post {
-        success {
-            slackSend (
-                channel: 'jenkins-cicd',
-                color: 'good',
-                message: "✅ Pipeline '${env.JOB_NAME} [#${env.BUILD_NUMBER}]' succeeded!\nURL: ${env.BUILD_URL}"
-            )
-        }
-        failure {
-            slackSend (
-                channel: 'jenkins-cicd',
-                color: 'danger',
-                message: "❌ Pipeline '${env.JOB_NAME} [#${env.BUILD_NUMBER}]' failed!\nURL: ${env.BUILD_URL}"
-            )
-        }
-    }
+  }
 }
