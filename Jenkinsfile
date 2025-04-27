@@ -74,7 +74,44 @@ pipeline {
             }
         }
 
-        
+        stage('UploadArtifact') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '172.31.23.121:8081',
+                    groupId: 'QA',
+                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+                    repository: 'vprofile-repo',
+                    credentialsId: 'nexuslogin',
+                    artifacts: [
+                        [
+                            artifactId: 'vproapp',
+                            classifier: '',
+                            file: 'target/vprofile-v2.war',
+                            type: 'war'
+                        ]
+                    ]
+                )
+            }
+        }
+    }
 
+    // --- Yeh post block stages ke baad likhna zaroori hai ---
+    post {
+        success {
+            slackSend (
+                channel: 'jenkins-cicd',
+                color: 'good',
+                message: "✅ Pipeline '${env.JOB_NAME} [#${env.BUILD_NUMBER}]' succeeded!\nURL: ${env.BUILD_URL}"
+            )
+        }
+        failure {
+            slackSend (
+                channel: 'jenkins-cicd',
+                color: 'danger',
+                message: "❌ Pipeline '${env.JOB_NAME} [#${env.BUILD_NUMBER}]' failed!\nURL: ${env.BUILD_URL}"
+            )
+        }
     }
 }
