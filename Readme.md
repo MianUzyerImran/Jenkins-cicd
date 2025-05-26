@@ -8,7 +8,7 @@ Stage 1 : Fetch code from GitHub Repository using the `atom` branch.
 
 Stage 2 : Build the application to generate build artifacts (WAR file) while skipping tests.
 
-Stage 3 : Execute unit tests using `mvn test` to ensure code correctness.
+Stage 3 : Execute unit tests using `mvn test`.
 
 Stage 4 : Perform Checkstyle Analysis.
 
