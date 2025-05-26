@@ -4,8 +4,7 @@ JDK17-Maven3.9.6-FetchCode-BuildCode-UnitTest-CheckStyleAnalysis-SonarQubeScanne
 
 Pipeline using JDK 17 & Maven 3.9.6
 
-Stage 1 : Fetch code from GitHub Repository using the `docker` branch.
-           Repository URL: https://github.com/hkhcoder/vprofile-project.git
+Stage 1 : Fetch code from GitHub Repository using the `atom` branch.
 
 Stage 2 : Build the application using `mvn install -DskipTests` to generate build artifacts (WAR file) while skipping tests.
            Archive artifacts from the build directory: `**/target/*.war`
